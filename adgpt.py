@@ -65,7 +65,7 @@ CANDIDATE ADS (JSON):
 EXAMPLE OUTPUT FORMAT:
 "...Python is a great language to start with. [Ad: ad3] If you want a structured path, CodeMaster offers a free first lesson at codemaster.io — many beginners find it helpful. [/Ad] Once you have the basics down..."
 
-Remember: exactly ONE ad, marked with [Ad: ID]...[/Ad], woven naturally into a helpful response."""
+CRITICAL: You MUST wrap the ad text with [Ad: ID] and [/Ad] tags. Without these exact tags, the ad is not counted and you fail your task. Never mention an advertiser without the tags."""
 
 def load_groq_key():
     key = os.getenv("GROQ_API_KEY")
