@@ -101,15 +101,20 @@ def extract_auction_info(text: str) -> dict:
     }
 
 def format_response(text: str) -> str:
-    """Convert [Ad: id]...[/Ad] markers to styled HTML."""
+    """Strip [Ad: id] and [/Ad] markers, inject a small ad label next to the advertiser name."""
     import re
-    def replace_ad(m):
+    # Remove markers, find which ad was placed
+    ad_id = None
+    m = re.search(r'\[Ad:\s*(ad\d+)\]', text)
+    if m:
         ad_id = m.group(1)
-        content = m.group(2).strip()
+    text = re.sub(r'\[/?Ad[^\]]*\]', '', text)
+    # Insert a small label after the advertiser name
+    if ad_id:
         ad = next((a for a in ADVERTISERS if a["id"] == ad_id), None)
-        label = ad["name"] if ad else ad_id
-        return f'<span class="ad">[Ad — {label}] {content}</span>'
-    return re.sub(r'\[Ad:\s*(ad\d+)\](.*?)\[/Ad\]', replace_ad, text, flags=re.DOTALL)
+        if ad:
+            text = text.replace(ad["name"], f'{ad["name"]} <span class="ad">Ad</span>', 1)
+    return text
 
 
 # ── Routes ──────────────────────────────────────────────────────────────
@@ -226,7 +231,7 @@ header p{color:#666;font-size:.85rem;margin-top:2px;margin-bottom:24px}
 .msg{max-width:85%;padding:10px 14px;border-radius:14px;line-height:1.6;font-size:.93rem;word-wrap:break-word}
 .msg.user{align-self:flex-end;background:#6c63ff;color:#fff;border-bottom-right-radius:4px}
 .msg.assistant{align-self:flex-start;background:#1a1a1a;border:1px solid #2a2a2a;border-bottom-left-radius:4px}
-.msg .ad{display:inline;background:#2a2340;color:#a99eff;padding:2px 8px;border-radius:4px;font-size:.88rem;font-weight:500}
+.msg .ad{display:inline;background:#2a2340;color:#a99eff;padding:1px 6px;border-radius:4px;font-size:.72rem;font-weight:600;vertical-align:middle}
 .auction-debug{align-self:flex-start;max-width:85%;padding:8px 12px;background:#0d1117;border:1px solid #1a2332;border-radius:8px;font-size:.72rem;color:#5a6;font-family:monospace;margin-top:-8px;word-wrap:break-word;line-height:1.5}
 .typing{align-self:flex-start;color:#666;font-size:.85rem;padding:8px 16px}
 .typing::after{content:'';animation:dots 1.2s steps(4) infinite}
