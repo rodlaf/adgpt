@@ -180,7 +180,7 @@ header p{color:#666;font-size:.85rem;margin-top:2px;margin-bottom:24px}
 </style></head>
 <body>
 <div class="page">
-<header><h1>Ad<span>GPT</span></h1><p>Free LLM tokens &mdash; one native ad per response</p></header>
+<header><h1>Ad<span>GPT</span></h1><p>Free LLM tokens - one native ad per response</p></header>
 <div class="tabs">
 <div class="tab active" onclick="switchTab('chat-tab')">Chat</div>
 <div class="tab" onclick="switchTab('ads-tab')">Advertisers</div>
@@ -198,21 +198,21 @@ header p{color:#666;font-size:.85rem;margin-top:2px;margin-bottom:24px}
 <div class="adlist">
 <div class="adcard"><h3>Alpha Airlines</h3><span class="genre">travel</span><span class="bid">bid: 82</span><p>Book flights worldwide. 20% off with code FLY20 at alphaairlines.com.</p></div>
 <div class="adcard"><h3>TechGear Pro</h3><span class="genre">technology</span><span class="bid">bid: 77</span><p>Studio-quality headphones, 20% off today. techgearpro.com.</p></div>
-<div class="adcard"><h3>CodeMaster</h3><span class="genre">education</span><span class="bid">bid: 71</span><p>Learn to code fast &mdash; first lesson free. codemaster.io.</p></div>
+<div class="adcard"><h3>CodeMaster</h3><span class="genre">education</span><span class="bid">bid: 71</span><p>Learn to code fast - first lesson free. codemaster.io.</p></div>
 <div class="adcard"><h3>Beta Resort</h3><span class="genre">travel</span><span class="bid">bid: 65</span><p>Luxury beachfront stays from $99/night. betaresort.com.</p></div>
 <div class="adcard"><h3>VitaBoost</h3><span class="genre">health</span><span class="bid">bid: 45</span><p>Daily vitamins with free shipping on first order. vitaboost.com.</p></div>
-<div class="adcard"><h3>FreshBite</h3><span class="genre">food</span><span class="bid">bid: 38</span><p>Meal kits delivered &mdash; first box free. freshbite.com.</p></div>
+<div class="adcard"><h3>FreshBite</h3><span class="genre">food</span><span class="bid">bid: 38</span><p>Meal kits delivered - first box free. freshbite.com.</p></div>
 </div>
 </div>
 <div class="info">
 <h2>How it works</h2>
-<p>Implements the generative auction from <a href="https://arxiv.org/abs/2512.10551">Zhao et al., &ldquo;LLM-Auction: Generative Auction towards LLM-Native Advertising&rdquo; (2025)</a>. The full candidate ad set with bids is passed to <code>llama-3.1-8b</code> via Groq. The model selects the most relevant ad and integrates it natively into its response in a single inference call. A first-price payment rule applies. The green debug line shows the auction outcome.</p>
+<p>Implements the generative auction from <a href="https://arxiv.org/abs/2512.10551">Zhao et al., "LLM-Auction: Generative Auction towards LLM-Native Advertising" (2025)</a>. The full candidate ad set with bids is passed to <code>llama-3.1-8b</code> via Groq. The model selects the most relevant ad and integrates it natively into its response in a single inference call. A first-price payment rule applies. The green debug line shows the auction outcome.</p>
 <h3>API Usage</h3>
 <p>The API is OpenAI-compatible. Just point your client at <code>/api/chat</code> with standard <code>messages</code>:</p>
 <pre>curl -X POST https://your-host/api/chat \\
   -H "Content-Type: application/json" \\
   -d '{"messages": [{"role": "user", "content": "Plan a trip to Hawaii"}]}'</pre>
-<p>Response includes the LLM reply with a natively integrated ad, plus an <code>auction</code> object showing which advertiser won and their payment. Works as a drop-in replacement for any OpenAI-style chat endpoint &mdash; free tokens, ad-supported.</p>
+<p>Response includes the LLM reply with a natively integrated ad, plus an <code>auction</code> object showing which advertiser won and their payment. Works as a drop-in replacement for any OpenAI-style chat endpoint - free tokens, ad-supported.</p>
 </div>
 </div>
 <script>
