@@ -11,12 +11,31 @@ ad at a contextually appropriate point. A first-price payment rule applies.
 One inference call — no logprobs, no extra passes.
 """
 
-import os, json, random
+import os, json, random, hashlib, sqlite3, time
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 import requests as http
 
 app = FastAPI(title="AdGPT")
+
+# Simple in-memory response cache: hash(messages) -> response dict
+_cache: dict[str, dict] = {}
+
+# SQLite request log
+DB_PATH = os.path.join(os.path.dirname(__file__), "adgpt_logs.db")
+
+def _init_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY, ts REAL, query TEXT, ad_winner TEXT, cached INTEGER)")
+    conn.close()
+
+_init_db()
+
+def _log_request(query: str, ad_winner: str, cached: bool):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("INSERT INTO logs (ts, query, ad_winner, cached) VALUES (?, ?, ?, ?)", (time.time(), query, ad_winner, int(cached)))
+    conn.commit()
+    conn.close()
 
 MODEL = "llama-3.1-8b-instant"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -99,10 +118,57 @@ def format_response(text: str) -> str:
 async def home():
     return HTMLResponse(content=HTML)
 
+@app.get("/logs", response_class=HTMLResponse)
+async def logs():
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("SELECT ts, query, ad_winner, cached FROM logs ORDER BY id DESC LIMIT 100").fetchall()
+    conn.close()
+    total = len(rows)
+    cached_count = sum(1 for r in rows if r[3])
+    trs = ""
+    for ts, query, winner, cached in rows:
+        t = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(ts))
+        q = (query or "")[:80].replace("<", "&lt;")
+        c = "yes" if cached else "no"
+        w = (winner or "-").replace("<", "&lt;")
+        trs += f"<tr><td>{t}</td><td>{q}</td><td>{w}</td><td>{c}</td></tr>"
+    return HTMLResponse(content=f"""<!DOCTYPE html><html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AdGPT Logs</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f0f;color:#e0e0e0;padding:40px 20px}}
+.page{{max-width:800px;margin:0 auto}}
+h1{{font-size:1.4rem;color:#fff;margin-bottom:4px}}
+h1 span{{color:#6c63ff}}
+.stats{{color:#666;font-size:.82rem;margin-bottom:20px}}
+a{{color:#6c63ff;text-decoration:none}}
+a:hover{{text-decoration:underline}}
+table{{width:100%;border-collapse:collapse;font-size:.85rem}}
+th{{text-align:left;color:#888;border-bottom:1px solid #333;padding:8px 10px;font-weight:600}}
+td{{padding:8px 10px;border-bottom:1px solid #1a1a1a;color:#ccc}}
+tr:hover td{{background:#111}}
+</style></head><body>
+<div class="page">
+<h1>Ad<span>GPT</span> Logs</h1>
+<p class="stats">{total} requests shown (last 100) · {cached_count} cached · <a href="/">← back to chat</a></p>
+<table><tr><th>Time (UTC)</th><th>Query</th><th>Ad Winner</th><th>Cached</th></tr>{trs}</table>
+{f'<p style="color:#555;margin-top:20px;font-size:.85rem">No requests yet.</p>' if not trs else ''}
+</div></body></html>""")
+
 @app.post("/api/chat")
 async def chat(request: Request):
     body = await request.json()
     messages = body.get("messages", [])
+
+    # Cache lookup
+    cache_key = hashlib.sha256(json.dumps(messages, sort_keys=True).encode()).hexdigest()
+    if cache_key in _cache:
+        cached = _cache[cache_key]
+        query = messages[-1]["content"] if messages else ""
+        _log_request(query, cached.get("auction", {}).get("winner", ""), True)
+        return cached
+
     api_key = load_groq_key()
     if not api_key:
         return JSONResponse(status_code=400, content={"error": "GROQ_API_KEY not configured"})
@@ -120,7 +186,11 @@ async def chat(request: Request):
         auction = extract_auction_info(raw)
         display = format_response(raw)
         
-        return {"role": "assistant", "content": display, "auction": auction}
+        result = {"role": "assistant", "content": display, "auction": auction}
+        _cache[cache_key] = result
+        query = messages[-1]["content"] if messages else ""
+        _log_request(query, auction.get("winner", ""), False)
+        return result
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -169,6 +239,9 @@ header p{color:#666;font-size:.85rem;margin-top:2px;margin-bottom:24px}
 #bar button:hover{background:#5a52d5}
 #bar button:disabled{background:#333;color:#666;cursor:not-allowed}
 .welcome{margin:auto;text-align:center;color:#444;font-size:.95rem}
+.examples{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}
+.ex{background:#1a1a1a;border:1px solid #333;border-radius:20px;padding:6px 14px;font-size:.82rem;color:#a99eff;cursor:pointer;transition:all .2s}
+.ex:hover{background:#2a2340;border-color:#6c63ff}
 .error{color:#ff6b6b}
 .info{margin-top:28px;padding:20px;background:#141414;border:1px solid #222;border-radius:12px;font-size:.88rem;line-height:1.7;color:#999}
 .info h2{font-size:1rem;color:#ccc;margin-bottom:8px;font-weight:600}
@@ -187,7 +260,7 @@ header p{color:#666;font-size:.85rem;margin-top:2px;margin-bottom:24px}
 </div>
 <div id="chat-tab" class="tabcontent active">
 <div class="chatbox">
-<div id="chat"><div class="welcome">Send a message to start chatting<br><small style="color:#555">Responses include one contextually relevant ad</small></div></div>
+<div id="chat"><div class="welcome">Send a message to start chatting<br><small style="color:#555">Responses include one contextually relevant ad</small><div class="examples"><div class="ex" onclick="tryExample(this)">Plan a weekend trip to Hawaii</div><div class="ex" onclick="tryExample(this)">Best way to learn Python?</div><div class="ex" onclick="tryExample(this)">Quick healthy dinner ideas</div><div class="ex" onclick="tryExample(this)">Recommend noise-cancelling headphones</div></div></div></div>
 <div id="bar">
 <textarea id="input" rows="1" placeholder="Type a message..." autofocus></textarea>
 <button id="send">Send</button>
@@ -213,6 +286,7 @@ header p{color:#666;font-size:.85rem;margin-top:2px;margin-bottom:24px}
   -H "Content-Type: application/json" \\
   -d '{"messages": [{"role": "user", "content": "Plan a trip to Hawaii"}]}'</pre>
 <p>Response includes the LLM reply with a natively integrated ad, plus an <code>auction</code> object showing which advertiser won and their payment. Works as a drop-in replacement for any OpenAI-style chat endpoint - free tokens, ad-supported.</p>
+<p style="margin-top:14px;font-size:.78rem"><a href="/logs" style="color:#555;border-bottom:1px solid #333">request logs</a></p>
 </div>
 </div>
 <script>
@@ -246,6 +320,7 @@ function addDebug(a){
 function autoGrow(){input.style.height='auto';input.style.height=Math.min(input.scrollHeight,120)+'px';}
 input.addEventListener('input',autoGrow);
 input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+function tryExample(el){input.value=el.textContent;send();}
 btn.onclick=send;
 
 async function send(){
